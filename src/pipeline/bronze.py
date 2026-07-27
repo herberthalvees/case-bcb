@@ -176,12 +176,20 @@ def _contar_linhas(spark: SparkSession, tabela: str) -> int:
     return int(escalar(spark, f"SELECT COUNT(*) FROM {tabela}") or 0)
 
 
-def _contar_arquivos(spark: SparkSession, caminho: str) -> int:
-    """Conta os arquivos JSON presentes no Volume de landing."""
+def _contar_arquivos(
+    spark: SparkSession, caminho: str, padrao_arquivo: str = "*.json"
+) -> int:
+    """Conta os arquivos presentes no Volume de landing.
+
+    Usa a fonte ``binaryFile`` em vez do comando ``LIST``: é API pública do
+    Spark, funciona igual em qualquer tipo de compute e não depende de
+    extensão SQL específica.
+    """
     try:
         return int(
-            spark.sql(f"LIST '{caminho}'")
-            .filter(F.col("name").endswith(".json"))
+            spark.read.format("binaryFile")
+            .option("pathGlobFilter", padrao_arquivo)
+            .load(caminho)
             .count()
         )
     except Exception as erro:  # noqa: BLE001 - caminho inexistente vira 0
