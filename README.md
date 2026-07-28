@@ -250,7 +250,23 @@ Volume.
 | Silver — total na tabela | 1.315 | 1.315 |
 | Gold — total na tabela | 60 | 60 |
 
-Conferência independente:
+### 7.1 Workflow executado
+
+As três tasks encadeadas em `bronze` → `silver` → `gold`, todas concluídas.
+
+![Workflow case_bcb_pipeline concluído](evidencias/01_workflow_sucesso.png)
+
+### 7.2 Histórico de operações do Delta
+
+Esta é a evidência mais forte, e não depende de print: o Delta registra as
+métricas de cada operação no histórico da própria tabela. A primeira execução
+inseriu 1.315 linhas; todas as seguintes registram `numTargetRowsInserted = 0`
+e `numTargetRowsUpdated = 0`, lendo exatamente a mesma origem.
+
+![Histórico do MERGE na Silver](evidencias/02_historico_merge_silver.png)
+
+Qualquer avaliador pode reconsultar isso a qualquer momento, sem depender das
+imagens acima:
 
 ```sql
 -- Bronze: um único lote de ingestão por arquivo
@@ -258,11 +274,23 @@ SELECT arquivo_origem, COUNT(*) AS linhas, COUNT(DISTINCT ingerido_em) AS lotes
 FROM workspace.case_bcb.bronze_sgs_raw
 GROUP BY arquivo_origem;
 
+-- Silver: métricas de cada MERGE, versão a versão
+DESCRIBE HISTORY workspace.case_bcb.silver_series_bcb;
+
 -- Silver: linhas iguais a chaves de negócio distintas
 SELECT COUNT(*) AS linhas,
        COUNT(DISTINCT serie_id, data_referencia) AS chaves
 FROM workspace.case_bcb.silver_series_bcb;
 ```
+
+O notebook `notebooks/99_evidencias.py` reúne todas essas consultas, e
+`sql/99_evidencias.sql` traz o equivalente para o SQL Editor.
+
+### 7.3 Checagens de qualidade aprovadas
+
+As 18 checagens das três camadas, avaliadas contra o estado atual das tabelas.
+
+![Checagens de qualidade aprovadas](evidencias/03_checagens_qualidade.png)
 
 ---
 
@@ -280,6 +308,8 @@ estivessem erradas, estes números não fechariam.
 | 2022 | 5,78 | 5,79 | 12,39 | 6,24 |
 | 2023 | 4,62 | 4,62 | 13,04 | 8,05 |
 | 2024 | 4,83 | 4,83 | 10,88 | 5,77 |
+
+![Acumulados de 12 meses na Gold](evidencias/04_validacao_ibge.png)
 
 O juro real negativo em 2020 e 2021 e a virada a partir de 2022 refletem o
 período de juro nominal no piso durante a pandemia, seguido do ciclo de aperto
@@ -310,6 +340,8 @@ A CLI aceita `--serie`, `--data-inicial`, `--data-final`, `--output-dir`,
 `--timeout` e `--max-tentativas`. Ela grava também um `_manifest.json` com
 sha256, contagem e janela de datas de cada série — o que permite auditar se
 duas extrações produziram o mesmo conteúdo.
+
+![Extração local e manifesto](evidencias/05_extracao_local.png)
 
 O script trata erros de rede, retenta com backoff exponencial e jitter apenas
 em status transitórios (408, 425, 429, 5xx) e falha explicitamente com
