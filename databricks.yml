@@ -1,0 +1,48 @@
+# Databricks Asset Bundle — define o pipeline como código.
+#
+# Deploy:  databricks bundle deploy -t dev
+# Execução: databricks bundle run case_bcb_pipeline -t dev
+#
+# O bundle sobe os arquivos do repositório para o workspace e cria (ou
+# atualiza) o job descrito em resources/. Nada é clicado na UI.
+
+bundle:
+  name: case_bcb
+
+include:
+  - resources/*.yml
+
+# Artefatos que não fazem parte da execução no Databricks.
+# O .gitignore já é respeitado pelo sync, então só o que está versionado
+# e não serve ao runtime precisa ser listado aqui.
+sync:
+  exclude:
+    - data/**
+    - evidencias/**
+    - tests/**
+
+variables:
+  catalogo:
+    description: Catálogo do Unity Catalog onde as tabelas são registradas.
+    default: workspace
+  schema:
+    description: Schema que abriga as três camadas e os volumes.
+    default: case_bcb
+
+targets:
+  # Ambiente de trabalho. O modo development prefixa o nome do job com o
+  # usuário, pausa os agendamentos e isola os arquivos na pasta pessoal —
+  # então o deploy nunca colide com o job de produção.
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-c7804ef9-ccc9.cloud.databricks.com
+
+  # Ambiente definitivo. Nome limpo, agendamento ativo, arquivos fora da
+  # pasta pessoal para não depender de um usuário específico.
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-c7804ef9-ccc9.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}

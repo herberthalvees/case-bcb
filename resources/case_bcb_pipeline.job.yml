@@ -1,0 +1,59 @@
+# Definição declarativa do Workflow. Substitui a criação manual pela UI.
+#
+# Os caminhos dos notebooks são relativos a este arquivo. Como não há bloco
+# de compute declarado, as tasks rodam em serverless.
+
+resources:
+  jobs:
+    case_bcb_pipeline:
+      name: case_bcb_pipeline
+      description: >-
+        Pipeline medalhão das séries SELIC (11) e IPCA (433) do SGS/BCB.
+        Bronze (Auto Loader) -> Silver (MERGE idempotente) -> Gold (juro real
+        mensal pela equação de Fisher).
+
+      tags:
+        projeto: case_bcb
+        origem: sgs_bcb
+        camada: medalhao
+
+      # Uma execução por vez: as camadas escrevem nas mesmas tabelas e
+      # execuções concorrentes disputariam o mesmo checkpoint do Auto Loader.
+      max_concurrent_runs: 1
+
+      # Em target dev o bundle pausa este agendamento automaticamente.
+      schedule:
+        quartz_cron_expression: "0 5 9 * * ?"
+        timezone_id: America/Sao_Paulo
+        pause_status: UNPAUSED
+
+      tasks:
+        - task_key: bronze
+          description: >-
+            Ingestão incremental do Volume para Delta, preservando o dado bruto
+            como string e registrando procedência.
+          notebook_task:
+            notebook_path: ../notebooks/01_bronze.py
+          # Sem retentativa: as falhas deste job são de qualidade de dado,
+          # portanto determinísticas. Repetir só atrasaria o alerta.
+          max_retries: 0
+
+        - task_key: silver
+          description: >-
+            Tipagem, padronização de datas e carga idempotente via MERGE pela
+            chave de negócio (serie_id, data_referencia).
+          depends_on:
+            - task_key: bronze
+          notebook_task:
+            notebook_path: ../notebooks/02_silver.py
+          max_retries: 0
+
+        - task_key: gold
+          description: >-
+            Consolidação mensal: SELIC capitalizada, IPCA, juro real e taxas
+            acumuladas em 12 meses.
+          depends_on:
+            - task_key: silver
+          notebook_task:
+            notebook_path: ../notebooks/03_gold.py
+          max_retries: 0
