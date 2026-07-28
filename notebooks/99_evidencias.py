@@ -146,20 +146,43 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 6. Reexecução das checagens de qualidade
+# MAGIC ## 6. As 18 checagens de qualidade
 # MAGIC
-# MAGIC As 18 checagens das três camadas, avaliadas contra o estado atual.
+# MAGIC Cada checagem avaliada contra o estado atual das tabelas, com o valor
+# MAGIC esperado e o observado. A célula seguinte reexecuta a avaliação de
+# MAGIC verdade: se alguma reprovar, levanta `DataQualityError`.
 
 # COMMAND ----------
 
 from src.pipeline import bronze, gold, silver  # noqa: E402
 from src.pipeline.quality import avaliar  # noqa: E402
 
-for camada, resultados in [
+por_camada = [
     ("bronze", bronze.checagens(spark)),
     ("silver", silver.checagens(spark)),
     ("gold", gold.checagens(spark)),
-]:
+]
+
+display(
+    spark.createDataFrame(
+        [
+            {
+                "camada": camada,
+                "checagem": resultado.nome,
+                "situacao": "PASSOU" if resultado.aprovado else "FALHOU",
+                "esperado": resultado.esperado,
+                "observado": str(resultado.observado),
+                "por_que_existe": resultado.descricao,
+            }
+            for camada, resultados in por_camada
+            for resultado in resultados
+        ]
+    )
+)
+
+# COMMAND ----------
+
+for camada, resultados in por_camada:
     avaliar(resultados, camada=camada)
 
-print("\nAs 18 checagens das três camadas passaram.")
+print("As 18 checagens das três camadas passaram.")
